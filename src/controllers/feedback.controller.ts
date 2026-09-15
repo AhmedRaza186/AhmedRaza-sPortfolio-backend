@@ -25,6 +25,11 @@ export const submitFeedback = async (req: Request, res: Response, next: NextFunc
     const { rating, text, audioBase64 } = req.body;
     let audioUrl = '';
 
+    console.log(`\n[Feedback API] Received new feedback submission`);
+    console.log(`[Feedback API] Rating: ${rating || 'None'}`);
+    console.log(`[Feedback API] Text provided: ${text ? 'Yes' : 'No'}`);
+    console.log(`[Feedback API] Voice note provided: ${audioBase64 ? 'Yes' : 'No'}`);
+
     // 1. Upload audio to Cloudinary if provided
     if (audioBase64) {
       // Cloudinary's parser sometimes rejects data URIs with extra parameters like ';codecs=opus'. 
@@ -32,11 +37,13 @@ export const submitFeedback = async (req: Request, res: Response, next: NextFunc
       const base64Data = audioBase64.replace(/^data:audio\/[^;]+(?:;codecs=[^;]+)?;base64,/, '');
       const cleanDataUri = `data:video/webm;base64,${base64Data}`;
 
+      console.log(`[Feedback API] Uploading voice note to Cloudinary...`);
       const uploadResponse = await cloudinary.uploader.upload(cleanDataUri, {
         resource_type: 'video',
         format: 'webm',
       });
       audioUrl = uploadResponse.secure_url;
+      console.log(`[Feedback API] Voice note uploaded successfully: ${audioUrl}`);
     }
 
     // 2. Send Email
@@ -72,11 +79,17 @@ export const submitFeedback = async (req: Request, res: Response, next: NextFunc
       `,
     };
 
+    console.log(`[Feedback API] Sending email notification...`);
     await transporter.sendMail(mailOptions);
+    console.log(`[Feedback API] Email sent successfully!`);
 
     res.json({ success: true });
-  } catch (error) {
-    console.error('Feedback Submission Error:', error);
+  } catch (error: any) {
+    console.error('\n[Feedback API] ERROR during feedback submission:');
+    console.error(`[Feedback API] Message: ${error.message}`);
+    if (error.http_code) console.error(`[Feedback API] Cloudinary HTTP Code: ${error.http_code}`);
+    console.error(error);
+    
     next(error);
   }
 };

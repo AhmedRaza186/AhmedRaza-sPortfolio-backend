@@ -10,7 +10,10 @@ export const handleChatMessage = async (
   try {
     const { sessionId, message } = req.body;
 
+    console.log(`\n[Chat API] Received new chat request`);
+
     if (!message || typeof message !== 'string') {
+      console.warn(`[Chat API] Invalid message format`);
       res.status(400).json({ success: false, error: 'Message must be a non-empty string' });
       return;
     }
@@ -22,11 +25,13 @@ export const handleChatMessage = async (
     }
 
     if (trimmedMessage.length > 2000) {
+      console.warn(`[Chat API] Message exceeded length limit`);
       res.status(400).json({ success: false, error: 'Message exceeds maximum length of 2000 characters' });
       return;
     }
 
     let currentSessionId = sessionId;
+    console.log(`[Chat API] User prompt: "${trimmedMessage.substring(0, 50)}${trimmedMessage.length > 50 ? '...' : ''}"`);
 
     // Validate sessionId if provided
     if (currentSessionId) {
@@ -37,12 +42,15 @@ export const handleChatMessage = async (
         res.status(404).json({ success: false, error: 'Chat session not found' });
         return;
       }
-    } else {
-      // If no session ID provided, create a new session
+    } else if (!currentSessionId) {
+    // If no session ID provided, create a new session
       const newSession = await prisma.chatSession.create({
         data: {},
       });
       currentSessionId = newSession.id;
+      console.log(`[Chat API] Created new session: ${currentSessionId}`);
+    } else {
+      console.log(`[Chat API] Using existing session: ${currentSessionId}`);
     }
 
     // Save user message to database
@@ -67,8 +75,12 @@ export const handleChatMessage = async (
       content: msg.content
     }));
 
+    console.log(`[Chat API] Querying Groq AI with ${history.length} previous messages...`);
+    
     // Call Groq
     const aiResponseContent = await generateAIResponse(history, trimmedMessage);
+    
+    console.log(`[Chat API] AI response generated successfully!`);
 
     // Save AI response to database
     const aiMessage = await prisma.chatMessage.create({
@@ -90,7 +102,10 @@ export const handleChatMessage = async (
       sessionId: currentSessionId,
       message: aiMessage.content,
     });
-  } catch (error) {
+  } catch (error: any) {
+    console.error('\n[Chat API] ERROR during chat processing:');
+    console.error(`[Chat API] Message: ${error.message}`);
+    console.error(error);
     next(error);
   }
 };

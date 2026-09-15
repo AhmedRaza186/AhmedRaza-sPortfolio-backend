@@ -3,7 +3,10 @@ const messages = [
   "ahmed ka experience batao",
   "Ahmed ki internship kitne months ki thi?",
   "Where does Ahmed currently work?",
-  "Ahmed ka LinkedIn do"
+  "Ahmed ka LinkedIn do",
+  "can you make a website for me ?",
+  "can you make an app for me ?"
+  
 ];
 
 async function runTests() {

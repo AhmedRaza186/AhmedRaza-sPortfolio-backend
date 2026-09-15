@@ -1,5 +1,6 @@
 import Groq from 'groq-sdk';
 import { portfolioContext } from '../data/portfolioContext';
+import prisma from './../lib/prisma';
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
@@ -10,8 +11,21 @@ export const generateAIResponse = async (history: { role: string; content: strin
     throw new Error('GROQ_API_KEY is missing. Cannot generate AI response.');
   }
 
+  // Fetch dynamically learned facts from the database
+  const learnedFacts = await prisma.learnedFact.findMany({
+    orderBy: { createdAt: 'asc' }
+  });
+
+  let learnedFactsSection = '';
+  if (learnedFacts.length > 0) {
+    learnedFactsSection = `\nDynamically Learned Facts (CRITICAL - YOU MUST ADHERE TO THESE NEW FACTS):\n`;
+    learnedFacts.map((fact, index) => {
+      learnedFactsSection += `${index + 1}. ${fact.fact}\n`;
+    });
+  }
+
   const systemPrompt = `You are the AI assistant for Ahmed Raza's portfolio.
-You must answer questions about Ahmed using ONLY the provided factual context below.
+You must answer questions about Ahmed using ONLY the provided factual context below.${learnedFactsSection}
 
 Rules:
 ${portfolioContext.aiInstructions.map(rule => `- ${rule}`).join('\n')}
@@ -68,5 +82,39 @@ ${JSON.stringify(portfolioContext, (key, value) => key === 'aiInstructions' ? un
   } catch (error) {
     console.error('[Groq Service Error]', error);
     throw new Error(`Groq failed: ${error instanceof Error ? error.message : 'Unknown'}`);
+  }
+};
+
+export const processLearnedFact = async (rawInput: string): Promise<string> => {
+  if (!process.env.GROQ_API_KEY) {
+    throw new Error('GROQ_API_KEY is missing.');
+  }
+
+  const systemPrompt = `You are an expert translator and data extraction AI.
+Your ONLY job is to take the user's raw input (which may be in Roman Urdu, Urdu, broken English, or a mix) and extract the core fact or instruction they are trying to teach the AI.
+Convert it into a SINGLE, clear, professional English instruction or fact that another AI can strictly follow.
+
+Rules:
+1. Output ONLY the translated instruction/fact. No conversational filler like "Here is the fact:"
+2. Make it concise and actionable.
+3. Example Raw Input: "mera naya course start horaha hai kal se web dev ka"
+   Example Output: "Ahmed is starting a new Web Development course tomorrow."
+`;
+
+  try {
+    const chatCompletion = await groq.chat.completions.create({
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: rawInput }
+      ],
+      model: process.env.GROQ_MODEL || 'openai/gpt-oss-20b',
+      temperature: 0.1, // very low temperature for exact translation
+      max_tokens: 150,
+    });
+
+    return chatCompletion.choices[0]?.message?.content?.trim() || "Failed to extract fact.";
+  } catch (error) {
+    console.error('[Groq Process Fact Error]', error);
+    throw new Error(`Groq failed to process fact: ${error instanceof Error ? error.message : 'Unknown'}`);
   }
 };

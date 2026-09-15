@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../lib/prisma';
 import { generateAIResponse } from '../services/groq.service';
+import { notifyAIInteraction } from '../services/discord.service';
 
 export const handleChatMessage = async (
   req: Request,
@@ -90,6 +91,9 @@ export const handleChatMessage = async (
         content: aiResponseContent,
       },
     });
+
+    // Notify Discord
+    await notifyAIInteraction(trimmedMessage, aiResponseContent);
 
     // Update the session's updatedAt timestamp
     await prisma.chatSession.update({

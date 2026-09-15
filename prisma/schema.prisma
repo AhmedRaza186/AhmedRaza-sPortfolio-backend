@@ -31,3 +31,10 @@ model ChatMessage {
 
   @@index([sessionId])
 }
+
+model LearnedFact {
+  id        String   @id @default(uuid())
+  rawInput  String
+  fact      String   // The clean, English translated instruction
+  createdAt DateTime @default(now())
+}
